@@ -249,6 +249,7 @@ class MainActivity : QkThemedActivity(), MainView {
 
         compose.setVisible(state.page is Inbox || state.page is Archived)
         conversationsAdapter.emptyView = empty.takeIf { state.page is Inbox || state.page is Archived }
+        searchAdapter.emptyView = empty.takeIf { state.page is Searching }
 
         when (state.page) {
             is Inbox -> {
@@ -387,7 +388,7 @@ class MainActivity : QkThemedActivity(), MainView {
                 .show()
     }
 
-    override fun showChangelog(changelog: ChangelogManager.Changelog) {
+    override fun showChangelog(changelog: ChangelogManager.CumulativeChangelog) {
         changelogDialog.show(changelog)
     }
 

@@ -20,12 +20,13 @@ package com.moez.QKSMS.feature.compose
 
 import android.content.Context
 import android.net.Uri
+import android.os.Vibrator
 import android.provider.ContactsContract
 import android.telephony.SmsMessage
+import androidx.core.content.getSystemService
 import com.moez.QKSMS.R
 import com.moez.QKSMS.common.Navigator
 import com.moez.QKSMS.common.base.QkViewModel
-import com.moez.QKSMS.common.util.BillingManager
 import com.moez.QKSMS.common.util.ClipboardUtils
 import com.moez.QKSMS.common.util.MessageDetailsFormatter
 import com.moez.QKSMS.common.util.extensions.makeToast
@@ -42,6 +43,7 @@ import com.moez.QKSMS.interactor.MarkRead
 import com.moez.QKSMS.interactor.RetrySending
 import com.moez.QKSMS.interactor.SendMessage
 import com.moez.QKSMS.manager.ActiveConversationManager
+import com.moez.QKSMS.manager.BillingManager
 import com.moez.QKSMS.manager.PermissionManager
 import com.moez.QKSMS.model.Attachment
 import com.moez.QKSMS.model.Attachments
@@ -187,6 +189,10 @@ class ComposeViewModel @Inject constructor(
                 .map { conversation -> conversation.getTitle() }
                 .distinctUntilChanged()
                 .subscribe { title -> newState { copy(conversationtitle = title) } }
+
+        disposables += prefs.sendAsGroup.asObservable()
+                .distinctUntilChanged()
+                .subscribe { enabled -> newState { copy(sendAsGroup = enabled) } }
 
         disposables += attachments
                 .subscribe { attachments -> newState { copy(attachments = attachments) } }
@@ -389,7 +395,7 @@ class ComposeViewModel @Inject constructor(
         // Toggle the group sending mode
         view.sendAsGroupIntent
                 .autoDisposable(view.scope())
-                .subscribe { newState { copy(sendAsGroup = !sendAsGroup) } }
+                .subscribe { prefs.sendAsGroup.set(!prefs.sendAsGroup.get()) }
 
         // Scroll to search position
         searchSelection
@@ -444,7 +450,9 @@ class ComposeViewModel @Inject constructor(
                 .mapNotNull(messageRepo::getMessage)
                 .doOnNext { message -> view.setDraft(message.getText()) }
                 .autoDisposable(view.scope())
-                .subscribe { message -> cancelMessage.execute(message.id) }
+                .subscribe { message ->
+                    cancelMessage.execute(CancelDelayedMessage.Params(message.id, message.threadId))
+                }
 
         // Set the current conversation
         Observables
@@ -612,6 +620,13 @@ class ComposeViewModel @Inject constructor(
                         subIndex < subs.size - 1 -> subs[subIndex + 1]
                         else -> subs[0]
                     }
+
+                    if (subscription != null) {
+                        context.getSystemService<Vibrator>()?.vibrate(40)
+                        context.makeToast(context.getString(R.string.compose_sim_changed_toast,
+                                subscription.simSlotIndex + 1, subscription.displayName))
+                    }
+
                     newState { copy(subscription = subscription) }
                 }
                 .autoDisposable(view.scope())
@@ -636,6 +651,7 @@ class ComposeViewModel @Inject constructor(
                         Preferences.SEND_DELAY_LONG -> 10000
                         else -> 0
                     }
+                    val sendAsGroup = !state.editingMode || state.sendAsGroup
 
                     when {
                         // Scheduling a message
@@ -646,13 +662,13 @@ class ComposeViewModel @Inject constructor(
                                     .map { it.getUri() }
                                     .map { it.toString() }
                             val params = AddScheduledMessage
-                                    .Params(state.scheduled, subId, addresses, state.sendAsGroup, body, uris)
+                                    .Params(state.scheduled, subId, addresses, sendAsGroup, body, uris)
                             addScheduledMessage.execute(params)
                             context.makeToast(R.string.compose_scheduled_toast)
                         }
 
                         // Sending a group message
-                        state.sendAsGroup -> {
+                        sendAsGroup -> {
                             sendMessage.execute(SendMessage
                                     .Params(subId, conversation.id, addresses, body, attachments, delay))
                         }
@@ -687,7 +703,7 @@ class ComposeViewModel @Inject constructor(
                     this.attachments.onNext(ArrayList())
 
                     if (state.editingMode) {
-                        newState { copy(editingMode = false, sendAsGroup = true, hasError = !state.sendAsGroup) }
+                        newState { copy(editingMode = false, hasError = !sendAsGroup) }
                     }
                 }
                 .autoDisposable(view.scope())

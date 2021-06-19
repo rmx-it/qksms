@@ -23,11 +23,11 @@ import android.content.DialogInterface
 import android.view.LayoutInflater
 import androidx.appcompat.app.AlertDialog
 import com.moez.QKSMS.R
-import kotlinx.android.synthetic.main.field_dialog.view.*
+import kotlinx.android.synthetic.main.text_input_dialog.view.*
 
-class FieldDialog(context: Activity, hint: String, listener: (String) -> Unit) : AlertDialog(context) {
+class TextInputDialog(context: Activity, hint: String, listener: (String) -> Unit) : AlertDialog(context) {
 
-    private val layout = LayoutInflater.from(context).inflate(R.layout.field_dialog, null)
+    private val layout = LayoutInflater.from(context).inflate(R.layout.text_input_dialog, null)
 
     init {
         layout.field.hint = hint
@@ -40,7 +40,7 @@ class FieldDialog(context: Activity, hint: String, listener: (String) -> Unit) :
         }
     }
 
-    fun setText(text: String): FieldDialog {
+    fun setText(text: String): TextInputDialog {
         layout.field.setText(text)
         return this
     }
